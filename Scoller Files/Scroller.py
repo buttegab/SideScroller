@@ -91,7 +91,20 @@ class Bullet(pygame.sprite.Sprite):
 
     def get_drawables(self):
         """ return a sprite to draw """
+        #todo: debug this function by asking joey how does.
+        #w,h = self.image.get_size()
+        #return [DrawableSurface(self.image, 
+        #                        pygame.Rect(self.bpos_x, self.bpos_y, w, h))]
         return DrawableSurface(self.image, pygame.Rect((self.bpos_x, self.bpos_y), self.image.get_size()))
+
+    def collided_with(self, entity):
+        """ Returns True if the input drawable surface (entity) has
+            collided with the ground """
+        drawables = self.get_drawables()
+        rectangles = []
+        for d in drawables:
+            rectangles.append(d.get_rect())
+        return entity.get_rect().collidelist(rectangles) != -1
 
 class Enemy(pygame.sprite.Sprite):
     """ represents the state of the player in the game """
@@ -102,6 +115,15 @@ class Enemy(pygame.sprite.Sprite):
         self.pos_x = pos_x
         self.pos_y = pos_y
 
+
+    def collided_with(self, entity):
+        """ Returns True if the input drawable surface (entity) has
+            collided with the ground """
+        drawables = self.get_drawables()
+        rectangles = []
+        for d in drawables:
+            rectangles.append(d.get_rect())
+        return entity.get_rect().collidelist(rectangles) != -1
 
     def update(self):
         pygame.event.pump()
@@ -135,6 +157,9 @@ class ScrollerModel():
     def get_bullet_drawables(self):
         """ Return a list of DrawableSurfaces for the model """
         return [bullet.get_drawables() for bullet in self.bullets] + self.background.get_drawables()
+#todo make this work
+        #return self.bullets.get_drawables() + self.background.get_drawables()
+
 
     def get_enemy_drawables(self):
         return self.enemy.get_drawables() + self.background.get_drawables()
@@ -143,7 +168,13 @@ class ScrollerModel():
         """ Return True if the player is dead (for instance) the player
             has collided with an obstacle, and false otherwise """
         player_rect = self.plane.get_drawables()[0]
-        return self.background.collided_with(player_rect)
+        #return self.background.collided_with(player_rect)
+        if self.enemy.collided_with(player_rect):
+            return self.enemy.collided_with(player_rect)
+        elif self.background.collided_with(player_rect):
+            return self.background.collided_with(player_rect)
+        else:
+            return False
 
     def is_enemy_dead(self):
         enemy_rect = self.enemy.get_drawables()[0]
