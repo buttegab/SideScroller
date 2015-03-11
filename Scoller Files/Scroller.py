@@ -74,7 +74,7 @@ class Background():
         rectangles = []
         for d in drawables:
             rectangles.append(d.get_rect())
-        return entity.get_rect().collidelist(rectangles) != -1
+        return entity.collidelist(rectangles) != -1
 
 class Bullet(pygame.sprite.Sprite):
     """ represents the state of the player in the game """
@@ -119,11 +119,8 @@ class Enemy(pygame.sprite.Sprite):
     def collided_with(self, entity):
         """ Returns True if the input drawable surface (entity) has
             collided with the ground """
-        drawables = self.get_drawables()
-        rectangles = []
-        for d in drawables:
-            rectangles.append(d.get_rect())
-        return entity.get_rect().collidelist(rectangles) != -1
+        d_rect = self.get_drawables().get_rect()
+        return entity.colliderect(d_rect)
 
     def update(self):
         pygame.event.pump()
@@ -132,8 +129,13 @@ class Enemy(pygame.sprite.Sprite):
 
     def get_drawables(self):
         w,h = self.image.get_size()
-        return [DrawableSurface(self.image, 
-                                pygame.Rect(self.pos_x, self.pos_y, w, h))]
+        return DrawableSurface(self.image, 
+                                pygame.Rect(self.pos_x, self.pos_y, w, h))
+
+    def is_dead(self, bullet_list, background):
+        enemy_rect = self.get_drawables().get_rect()
+        bullet_rects = [bullet.get_drawables().get_rect() for bullet in bullet_list]
+        return background.collided_with(enemy_rect) or (enemy_rect.collidelist(bullet_rects) != -1)
 
 class ScrollerModel():
     """ Represents the game state of the scroller """
@@ -141,14 +143,10 @@ class ScrollerModel():
         """ Initialize the plane model """
         self.width = width
         self.height = height
-        # self.plane_model = Plane
-        self.background = Background(width, height)
         self.plane = Plane(0,200)
-        self.enemy = Enemy(1080, 200)
         self.background = Background(width, height)
         self.bullets = []
-        #self.bullets.append(Bullet(self.plane.pos_x,self.plane.pos_y))
-        self.enemies = []
+        self.enemies = [Enemy(1080, 200)]
 
     def get_plane_drawables(self):
         """ Return a list of DrawableSurfaces for the model """
@@ -162,60 +160,51 @@ class ScrollerModel():
 
 
     def get_enemy_drawables(self):
-        return self.enemy.get_drawables() + self.background.get_drawables()
+        return [enemy.get_drawables() for enemy in self.enemies] + self.background.get_drawables()
 
     def is_player_dead(self):
         """ Return True if the player is dead (for instance) the player
             has collided with an obstacle, and false otherwise """
-        player_rect = self.plane.get_drawables()[0]
+        player_rect = self.plane.get_drawables()[0].get_rect()
         #return self.background.collided_with(player_rect)
-        if self.enemy.collided_with(player_rect):
-            return self.enemy.collided_with(player_rect)
-        elif self.background.collided_with(player_rect):
-            return self.background.collided_with(player_rect)
-        else:
-            return False
+        for enemy in self.enemies:
+            if enemy.collided_with(player_rect):
+                return True
 
-    def is_enemy_dead(self):
-        enemy_rect = self.enemy.get_drawables()[0]
-        return self.background.collided_with(player_rect)
+        bg_rects = [d.get_rect() for d in self.background.get_drawables()]
+        return player_rect.collidelist(bg_rects) != -1
 
     def is_bullet_dead(self):
         """ Return True if the player is dead (for instance) the players
             has collided with an obstacle, and false otherwise """
-        bullet_rect = self.bullet.get_drawables()[0]
+        bullet_rect = self.bullet.get_drawables()[0].get_rect()
         return self.background.collided_with(bullet_rect)
 
     def plane_update(self):
         """ Updates the model and its constituent parts """
         self.plane.update()
 
-    def enemy_update(self):
-        #self.enemy.update()
-        pygame.event.pump()
-        for event in pygame.event.get():
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_k:
-                    print len(self.enemies)
-                    self.enemies.append(Enemy(1080, 200))
-        for enemy in self.enemies:
-            self.enemy.update()
-            if enemy.pos_x < 0:
-                self.enemies = self.enemies[1:]
-
-
-    def bullet_update(self):
+    def bullet_update(self, events):
         """checks for creation of a bullet. If bullet created, add bullet to
         a list of bullets"""
-        for event in pygame.event.get():
+        for event in events:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
-                    print len(self.bullets)
                     self.bullets.append(Bullet(self.plane.pos_x, self.plane.pos_y))
         for bullet in self.bullets:
             bullet.update()
-            if bullet.bpos_x > 1280:
-                self.bullets = self.bullets[1:]
+        if len(self.bullets) > 0 and self.bullets[0].bpos_x > 1280:
+            self.bullets = self.bullets[1:]
+
+    def enemy_update(self, events):
+        for event in events:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_k:
+                    self.enemies.append(Enemy(1080, 200))
+        for enemy in self.enemies:
+            enemy.update()
+            if enemy.pos_x < 0 or enemy.is_dead(self.bullets, self.background):
+                self.enemies = self.enemies[1:]
 
     def background_update(self):
         """Updates the background"""
@@ -257,9 +246,10 @@ class SideScroller():
         """ the main runloop... loop until death """
         last_update_time = time.time()
         while not(self.game_model.is_player_dead()):
+            events = pygame.event.get()
             self.game_model.plane_update()
-            self.game_model.bullet_update()
-            self.game_model.enemy_update()
+            self.game_model.bullet_update(events)
+            self.game_model.enemy_update(events)
             self.game_model.background_update()
             self.view.draw()
             last_update_time = time.time()
